@@ -39,6 +39,7 @@ const register = async (req, res) => {
 };
 
 // LOGIN USER
+// LOGIN USER
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -59,49 +60,50 @@ const login = async (req, res) => {
     // Token Payload
     const tokenData = {
       userId: user._id,
-      role: user.role, // Add role to the token
+      role: user.role,
     };
 
     // Generate JWT Token
-    const token = jwt.sign(tokenData, process.env.JWT_SECRET_KEY, { expiresIn: "1d" });
+    const token = jwt.sign(tokenData, process.env.JWT_SECRET_KEY, {
+      expiresIn: "1d",
+    });
 
-    // Store session in Redis for quick lookup
+    // Store session in Redis (optional — but you already have it)
     const redisSessionKey = `session:${user._id}`;
-    await redis.set(redisSessionKey, JSON.stringify({ userId: user._id, role: user.role }), "EX", 60 * 60 * 24); // 24-hour expiry
+    await redis.set(
+      redisSessionKey,
+      JSON.stringify({ userId: user._id, role: user.role }),
+      "EX",
+      60 * 60 * 24
+    );
 
-    return res
-      .status(200)
-      .cookie("token", token, {
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
-        httpOnly: true,
-        sameSite: "strict",
-      })
-      .json({
+    // ✅ Send token in response body (not cookie)
+    return res.status(200).json({
+      token,
+      user: {
         _id: user._id,
         email: user.email,
         name: user.name,
         profilePic: user.profilePic,
         role: user.role,
-        message: "Logged in Successfully",
-        success: true,
-      });
+      },
+      message: "Logged in Successfully",
+      success: true,
+    });
   } catch (error) {
     console.error("Login Error:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
 
-// LOGOUT USER
-const logout = (req, res) => {
-  try {
-    // Clear session from Redis
-    const redisSessionKey = `session:${req.userId}`;
-    redis.del(redisSessionKey);
 
-    return res
-      .status(200)
-      .cookie("token", "", { maxAge: 0 })
-      .json({ message: "User logged out successfully" });
+// LOGOUT USER
+const logout = async (req, res) => {
+  try {
+    const redisSessionKey = `session:${req.userId}`;
+    await redis.del(redisSessionKey);
+
+    return res.status(200).json({ message: "User logged out successfully" });
   } catch (error) {
     console.error("Logout Error:", error);
     return res.status(500).json({ message: "Server Error" });

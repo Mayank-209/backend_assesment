@@ -35,14 +35,21 @@ const createDeal = async (req, res) => {
     await invalidateDealCache(deal._id, buyerId, sellerId);
 
     // Optionally cache the created deal
-    await redis.set(`${DEAL_CACHE_PREFIX}${deal._id}`, JSON.stringify(deal), "EX", 60 * 5);
+    await redis.set(
+      `${DEAL_CACHE_PREFIX}${deal._id}`,
+      JSON.stringify(deal),
+      "EX",
+      60 * 5
+    );
 
     const sellerSocket = getReceiverSocketId(sellerId);
     if (sellerSocket) {
       io.to(sellerSocket).emit("newDeal", deal);
     }
 
-    res.status(201).json({ success: true, message: "Deal created successfully", deal });
+    res
+      .status(201)
+      .json({ success: true, message: "Deal created successfully", deal });
   } catch (error) {
     console.error("Error creating deal:", error);
     res.status(500).json({ message: "Server error" });
@@ -133,7 +140,9 @@ const updateDealStatus = async (req, res) => {
       (status === "Cancelled" || status === "Completed") &&
       userId !== deal.buyer.toString()
     ) {
-      return res.status(403).json({ message: "Only buyer can cancel/complete" });
+      return res
+        .status(403)
+        .json({ message: "Only buyer can cancel/complete" });
     }
 
     deal.status = status === "Accepted" ? "In Progress" : status;
@@ -147,7 +156,9 @@ const updateDealStatus = async (req, res) => {
     if (buyerSocket) io.to(buyerSocket).emit("deal-status-updated", deal);
     if (sellerSocket) io.to(sellerSocket).emit("deal-status-updated", deal);
 
-    res.status(200).json({ success: true, message: "Deal status updated", deal });
+    res
+      .status(200)
+      .json({ success: true, message: "Deal status updated", deal });
   } catch (error) {
     console.error("Error updating deal status:", error);
     res.status(500).json({ message: "Server error" });
@@ -158,20 +169,19 @@ const updateDealStatus = async (req, res) => {
 const negotiatePrice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { newPrice } = req.body;
+    const { newTitle, newDescription, newPrice } = req.body;
     const userId = req.userId;
 
     const deal = await Deal.findById(id);
     if (!deal) return res.status(404).json({ message: "Deal not found" });
 
-    if (
-      userId !== deal.buyer.toString() &&
-      userId !== deal.seller.toString()
-    ) {
+    if (userId !== deal.buyer.toString() && userId !== deal.seller.toString()) {
       return res.status(403).json({ message: "Unauthorized action" });
     }
 
-    deal.price = newPrice;
+    if (newPrice !== undefined) deal.price = newPrice;
+    if (newTitle !== undefined) deal.title = newTitle;
+    if (newDescription !== undefined) deal.description = newDescription;
     await deal.save();
 
     await invalidateDealCache(id, deal.buyer, deal.seller);
